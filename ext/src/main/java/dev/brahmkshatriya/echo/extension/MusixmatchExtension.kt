@@ -37,7 +37,7 @@ class MusixmatchExtension : ExtensionClient, LyricsClient, LyricsSearchClient {
         clientId: String,
         track: Track
     ): PagedData<Lyrics> = PagedData.Single {
-        return@Single toLyricsList(getSearchQuery("${track.artists.firstOrNull() ?: ""} ${track.title}"))
+        return@Single toLyricsList("${track.title} ${track.artists.firstOrNull()?.name ?: ""}".trim())
     }
 
     override suspend fun loadLyrics(lyrics: Lyrics): Lyrics {
@@ -59,7 +59,7 @@ class MusixmatchExtension : ExtensionClient, LyricsClient, LyricsSearchClient {
     }
 
     override fun searchLyrics(query: String): PagedData<Lyrics> = PagedData.Single {
-        return@Single toLyricsList(getSearchQuery(query))
+        return@Single toLyricsList(query)
     }
 
     private suspend fun toLyricsList(query: String): List<Lyrics> {
@@ -69,7 +69,7 @@ class MusixmatchExtension : ExtensionClient, LyricsClient, LyricsSearchClient {
                 "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
             )
             .addHeader("Cookie", "mxm_bab=AB")
-            .url(query)
+            .url(getSearchQuery(query))
             .build()
         val response = client.newCall(request).await()
         val tracks = json.decodeFromString<SearchResult>(response.body.string())
@@ -90,7 +90,7 @@ class MusixmatchExtension : ExtensionClient, LyricsClient, LyricsSearchClient {
             ?.addQueryParameter("subtitle_format", "mxm")
             ?.addQueryParameter("namespace", "lyrics_richsynched")
             ?.addQueryParameter("app_id", "web-desktop-app-v1.0")
-            ?.addQueryParameter("q", query)
+            ?.addQueryParameter("q", query.trim())
             ?.build()
             ?.toString()
             ?: throw RuntimeException("Cant build URL")

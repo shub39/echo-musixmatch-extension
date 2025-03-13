@@ -1,3 +1,4 @@
+![](musixmatch.png)
 # MusixMatch lyrics for [Echo](https://github.com/brahmkshatriya/echo)
 Match ur music or smth idk...
 
