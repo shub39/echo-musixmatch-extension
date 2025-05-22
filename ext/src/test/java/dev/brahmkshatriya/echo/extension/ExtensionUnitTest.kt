@@ -1,6 +1,5 @@
 package dev.brahmkshatriya.echo.extension
 
-import dev.brahmkshatriya.echo.common.models.Lyrics
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
@@ -41,13 +40,11 @@ class ExtensionUnitTest {
     // Actual Tests
     @Test
     fun searchTest() = testIn("Search Test") {
-        val searchResult = extension.searchLyrics("Daughters Guest House").loadFirst().first()
-        val result = extension.loadLyrics(Lyrics(
-            id = searchResult.id,
-            title = searchResult.title
-        ))
-
-        println(result)
-        //155701811
+        extension.searchLyrics("Satan in the Wait").loadAll().first().let {
+            extension.loadLyrics(it).lyrics.also {
+                println(it)
+            }
+        }
     }
+
 }
