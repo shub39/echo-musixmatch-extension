@@ -4,7 +4,8 @@ import dev.brahmkshatriya.echo.common.clients.ExtensionClient
 import dev.brahmkshatriya.echo.common.clients.LyricsClient
 import dev.brahmkshatriya.echo.common.clients.LyricsSearchClient
 import dev.brahmkshatriya.echo.common.helpers.ContinuationCallback.Companion.await
-import dev.brahmkshatriya.echo.common.helpers.PagedData
+import dev.brahmkshatriya.echo.common.models.Feed
+import dev.brahmkshatriya.echo.common.models.Feed.Companion.toFeed
 import dev.brahmkshatriya.echo.common.models.Lyrics
 import dev.brahmkshatriya.echo.common.models.Track
 import dev.brahmkshatriya.echo.common.settings.Setting
@@ -26,18 +27,18 @@ class MusixmatchExtension : ExtensionClient, LyricsClient, LyricsSearchClient {
 
     override suspend fun onExtensionSelected() {}
 
-    override val settingItems: List<Setting> = emptyList()
-
     private lateinit var setting: Settings
+    override suspend fun getSettingItems(): List<Setting> = emptyList()
+
     override fun setSettings(settings: Settings) {
         setting = settings
     }
 
-    override fun searchTrackLyrics(
+    override suspend fun searchTrackLyrics(
         clientId: String,
         track: Track
-    ): PagedData<Lyrics> = PagedData.Single {
-        return@Single toLyricsList("${track.title} ${track.artists.firstOrNull()?.name ?: ""}".trim())
+    ): Feed<Lyrics> {
+        return toLyricsList("${track.title} ${track.artists.firstOrNull()?.name ?: ""}".trim())
     }
 
     override suspend fun loadLyrics(lyrics: Lyrics): Lyrics {
@@ -58,11 +59,7 @@ class MusixmatchExtension : ExtensionClient, LyricsClient, LyricsSearchClient {
         )
     }
 
-    override fun searchLyrics(query: String): PagedData<Lyrics> = PagedData.Single {
-        return@Single toLyricsList(query)
-    }
-
-    private suspend fun toLyricsList(query: String): List<Lyrics> {
+    private suspend fun toLyricsList(query: String): Feed<Lyrics> {
         val request = Request.Builder()
             .addHeader(
                 "user-agent",
@@ -80,7 +77,7 @@ class MusixmatchExtension : ExtensionClient, LyricsClient, LyricsSearchClient {
                 title = it.track.trackName,
                 subtitle = it.track.artistName
             )
-        }
+        }.toFeed()
     }
 
     private fun getSearchQuery(query: String): String {
@@ -128,6 +125,10 @@ class MusixmatchExtension : ExtensionClient, LyricsClient, LyricsSearchClient {
         }
 
         return Lyrics.Timed(items)
+    }
+
+    override suspend fun searchLyrics(query: String): Feed<Lyrics> {
+        return toLyricsList(query)
     }
 
     companion object {
