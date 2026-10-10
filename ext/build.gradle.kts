@@ -9,12 +9,12 @@ plugins {
 }
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
 }
 
 kotlin {
-    jvmToolchain(17)
+    jvmToolchain(21)
 }
 
 fun <T : ModuleDependency> T.excludeKotlin() {
@@ -29,6 +29,8 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.coroutines.test)
     testImplementation(libs.echo.common)
+    testImplementation(libs.kotlinx.serialization.json)
+    testImplementation(libs.okhttp)
 }
 
 // Extension properties goto `gradle.properties` to set values
@@ -46,8 +48,8 @@ val extAuthorUrl: String? by project
 val extRepoUrl: String? by project
 val extUpdateUrl: String? by project
 
-val gitHash = execute("git", "rev-parse", "HEAD").take(7)
-val gitCount = execute("git", "rev-list", "--count", "HEAD").toInt()
+val gitHash = runCatching { execute("git", "rev-parse", "HEAD").take(7) }.getOrDefault("1.1.0")
+val gitCount = runCatching { execute("git", "rev-list", "--count", "HEAD").toInt() }.getOrDefault(12)
 val verCode = gitCount
 val verName = gitHash
 
@@ -92,14 +94,9 @@ tasks {
     }
 
     test {
-        enabled = false
-    }
-
-    compileTestKotlin {
-        enabled = false
+        useJUnit()
     }
 }
-
 
 fun execute(vararg command: String): String = providers.exec {
     commandLine(*command)
