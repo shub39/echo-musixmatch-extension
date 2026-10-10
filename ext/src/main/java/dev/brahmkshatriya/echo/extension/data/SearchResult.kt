@@ -11,6 +11,7 @@ data class SearchResult(
 @Serializable
 data class SearchMessage(
     val header: SearchHeader? = null,
+    @Serializable(with = SearchBodySerializer::class)
     val body: SearchBody? = null
 )
 
@@ -27,8 +28,11 @@ data class SearchBody(
     val trackList: List<TrackListWrapper>? = null
 )
 
+object SearchBodySerializer : EmptyArrayAsObjectSerializer<SearchBody>(SearchBody.serializer())
+
 @Serializable
 data class TrackListWrapper(
+    @Serializable(with = TrackItemSerializer::class)
     val track: TrackItem? = null
 )
 
@@ -61,3 +65,5 @@ data class TrackItem(
     @SerialName("restricted")
     val restricted: Int? = null
 )
+
+object TrackItemSerializer : EmptyArrayAsObjectSerializer<TrackItem>(TrackItem.serializer())
