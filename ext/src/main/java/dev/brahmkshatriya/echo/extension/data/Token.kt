@@ -11,6 +11,7 @@ data class Token(
 @Serializable
 data class TokenMessage(
     val header: TokenHeader? = null,
+    @Serializable(with = TokenBodySerializer::class)
     val body: TokenBody? = null
 )
 
@@ -26,3 +27,5 @@ data class TokenBody(
     @SerialName("user_token")
     val userToken: String? = null
 )
+
+object TokenBodySerializer : EmptyArrayAsObjectSerializer<TokenBody>(TokenBody.serializer())
