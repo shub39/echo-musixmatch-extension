@@ -4,34 +4,60 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class SearchResult (
-    val message: Message
+data class SearchResult(
+    val message: SearchMessage? = null
 )
 
 @Serializable
-data class Message (
-    val body: Body
+data class SearchMessage(
+    val header: SearchHeader? = null,
+    val body: SearchBody? = null
 )
 
 @Serializable
-data class Body (
+data class SearchHeader(
+    @SerialName("status_code")
+    val statusCode: Int? = null,
+    val hint: String? = null
+)
+
+@Serializable
+data class SearchBody(
     @SerialName("track_list")
-    val trackList: List<TrackList>
+    val trackList: List<TrackListWrapper>? = null
 )
 
 @Serializable
-data class TrackList (
-    val track: TrackClass
+data class TrackListWrapper(
+    val track: TrackItem? = null
 )
 
 @Serializable
-data class TrackClass (
+data class TrackItem(
     @SerialName("track_id")
-    val trackID: Long,
+    val trackID: Long? = null,
 
     @SerialName("track_name")
-    val trackName: String,
+    val trackName: String? = null,
 
     @SerialName("artist_name")
-    val artistName: String,
+    val artistName: String? = null,
+
+    @SerialName("album_name")
+    val albumName: String? = null,
+
+    @SerialName("has_lyrics")
+    val hasLyrics: Int? = null,
+
+    @SerialName("has_subtitles")
+    val hasSubtitles: Int? = null,
+
+    @SerialName("has_richsync")
+    val hasRichsync: Int? = null,
+
+    @SerialName("instrumental")
+    val instrumental: Int? = null,
+
+    @SerialName("restricted")
+    val restricted: Int? = null
 )

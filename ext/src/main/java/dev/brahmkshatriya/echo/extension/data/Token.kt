@@ -4,25 +4,25 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
-class Token (
-    val message: Message
-) {
-    @Serializable
-    data class Message (
-        val header: Header,
-        val body: Body
-    )
+data class Token(
+    val message: TokenMessage? = null
+)
 
-    @Serializable
-    data class Header(
-        @SerialName("status_code")
-        val statusCode: Int,
-        val hint: String? = null
-    )
+@Serializable
+data class TokenMessage(
+    val header: TokenHeader? = null,
+    val body: TokenBody? = null
+)
 
-    @Serializable
-    data class Body (
-        @SerialName("user_token")
-        val userToken: String,
-    )
-}
+@Serializable
+data class TokenHeader(
+    @SerialName("status_code")
+    val statusCode: Int? = null,
+    val hint: String? = null
+)
+
+@Serializable
+data class TokenBody(
+    @SerialName("user_token")
+    val userToken: String? = null
+)

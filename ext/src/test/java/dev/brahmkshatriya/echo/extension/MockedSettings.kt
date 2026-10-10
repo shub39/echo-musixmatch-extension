@@ -3,20 +3,29 @@ package dev.brahmkshatriya.echo.extension
 import dev.brahmkshatriya.echo.common.settings.Settings
 
 class MockedSettings : Settings {
-    override fun getBoolean(key: String): Boolean? = null
+    private val map = mutableMapOf<String, Any>()
 
-    override fun getInt(key: String): Int? = null
+    override fun getBoolean(key: String): Boolean? = map[key] as? Boolean
 
-    override fun getString(key: String): String? = null
+    override fun getInt(key: String): Int? = map[key] as? Int
 
-    override fun getStringSet(key: String): Set<String>? = null
+    override fun getString(key: String): String? = map[key] as? String
 
-    override fun putBoolean(key: String, value: Boolean?) {}
+    override fun getStringSet(key: String): Set<String>? = (map[key] as? Set<*>)?.filterIsInstance<String>()?.toSet()
 
-    override fun putInt(key: String, value: Int?) {}
+    override fun putBoolean(key: String, value: Boolean?) {
+        if (value == null) map.remove(key) else map[key] = value
+    }
 
-    override fun putString(key: String, value: String?) {}
+    override fun putInt(key: String, value: Int?) {
+        if (value == null) map.remove(key) else map[key] = value
+    }
 
-    override fun putStringSet(key: String, value: Set<String>?) {}
+    override fun putString(key: String, value: String?) {
+        if (value == null) map.remove(key) else map[key] = value
+    }
 
+    override fun putStringSet(key: String, value: Set<String>?) {
+        if (value == null) map.remove(key) else map[key] = value
+    }
 }

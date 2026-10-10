@@ -1,93 +1,135 @@
 package dev.brahmkshatriya.echo.extension
 
+import dev.brahmkshatriya.echo.common.settings.Settings
 import dev.brahmkshatriya.echo.extension.data.Token
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import okhttp3.*
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import java.nio.charset.StandardCharsets
-import javax.crypto.Mac
-import javax.crypto.spec.SecretKeySpec
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import java.time.Instant
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
-import java.util.Base64
+import java.util.UUID
 
 @Serializable
 data class TokenPayload(val token: String, val expiresAt: Long)
 
-@Suppress("NewApi")
 class TokenManager(
     private val client: OkHttpClient,
     private val json: Json
 ) {
+    var settings: Settings? = null
     private var payload: TokenPayload? = null
+    private val lock = Any()
 
     val token: String
-        get() {
-            if (isValid()) {
+        get() = synchronized(lock) {
+            // 1. Check user custom token from extension settings
+            val customToken = settings?.getString(KEY_USER_TOKEN)?.trim()
+            if (!customToken.isNullOrBlank() && isValidTokenString(customToken)) {
+                return customToken
+            }
+
+            // 2. Check in-memory token
+            if (payload != null && isValid(payload)) {
                 return payload!!.token
             }
-            load()
-            return payload!!.token
-        }
 
-    private fun isValid(): Boolean {
-        return payload?.let { Instant.now().epochSecond < it.expiresAt } ?: false
-    }
-
-    private fun load() {
-        val now = LocalDateTime.now()
-
-        val params = mapOf(
-            "format" to "json",
-            "app_id" to APP_ID
-        )
-
-        val queryString = params.entries.joinToString("&") { (k, v) -> "$k=$v" }
-        val url = "$API_URL/token.get?$queryString"
-
-        val signature = getApiSignature(url, now)
-
-        val fullUrl = url.toHttpUrlOrNull()?.newBuilder()
-            ?.addQueryParameter("signature", signature)
-            ?.addQueryParameter("signature_protocol", "sha1")
-            ?.build()
-            ?.toString() ?: throw RuntimeException("Failed to build URL")
-
-        val request = Request.Builder()
-            .addHeader("user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
-            .addHeader("Cookie", "mxm_bab=AB")
-            .url(fullUrl)
-            .build()
-
-        client.newCall(request).execute().use { response ->
-            val responseBody = response.body.string()
-
-            if (!response.isSuccessful) {
-                throw RuntimeException("API request failed with code: ${response.code}, body: $responseBody")
+            // 3. Check cached token from persistent settings
+            val cachedToken = settings?.getString(KEY_CACHED_TOKEN)?.trim()
+            val cachedExpiresAt = settings?.getString(KEY_CACHED_EXPIRES_AT)?.toLongOrNull() ?: 0L
+            if (!cachedToken.isNullOrBlank() && isValidTokenString(cachedToken) && Instant.now().epochSecond < cachedExpiresAt) {
+                payload = TokenPayload(cachedToken, cachedExpiresAt)
+                return cachedToken
             }
 
-            val msg = json.decodeFromString<Token>(responseBody)
-            val userToken = msg.message.body.userToken
-            payload = TokenPayload(userToken, Instant.now().plus(30, ChronoUnit.DAYS).epochSecond)
+            // 4. Try fetching fresh token from API
+            try {
+                val freshToken = fetchFreshToken()
+                if (isValidTokenString(freshToken)) {
+                    val expiresAt = Instant.now().plus(14, ChronoUnit.DAYS).epochSecond
+                    payload = TokenPayload(freshToken, expiresAt)
+                    settings?.putString(KEY_CACHED_TOKEN, freshToken)
+                    settings?.putString(KEY_CACHED_EXPIRES_AT, expiresAt.toString())
+                    return freshToken
+                }
+            } catch (_: Exception) {
+                // Ignore and fall through to fallback
+            }
+
+            // 5. Fallback pool
+            val fallback = FALLBACK_TOKENS.random()
+            payload = TokenPayload(fallback, Instant.now().plus(7, ChronoUnit.DAYS).epochSecond)
+            return fallback
         }
+
+    fun invalidateToken() = synchronized(lock) {
+        payload = null
+        settings?.putString(KEY_CACHED_TOKEN, null)
+        settings?.putString(KEY_CACHED_EXPIRES_AT, null)
     }
 
-    private fun getApiSignature(apiEndpoint: String, dateTime: LocalDateTime): String {
-        val key = "IEJ5E8XFaHQvIQNfs7IC"
-        val formattedDate = dateTime.format(DateTimeFormatter.ofPattern("yyyyMMdd"))
-        val data = apiEndpoint + formattedDate
-        val hmacSha1 = Mac.getInstance("HmacSHA1")
-        val secretKey = SecretKeySpec(key.toByteArray(StandardCharsets.UTF_8), "HmacSHA1")
-        hmacSha1.init(secretKey)
-        val signatureBytes = hmacSha1.doFinal(data.toByteArray(StandardCharsets.UTF_8))
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(signatureBytes)
+    private fun isValid(p: TokenPayload?): Boolean {
+        return p != null && isValidTokenString(p.token) && Instant.now().epochSecond < p.expiresAt
+    }
+
+    private fun isValidTokenString(t: String?): Boolean {
+        if (t.isNullOrBlank()) return false
+        if (t.length < 10) return false
+        // Check for dummy all-zero token returned when banned or blocked
+        if (t.all { it == '0' }) return false
+        return true
+    }
+
+    private fun fetchFreshToken(): String {
+        val guid = UUID.randomUUID().toString()
+        val t = System.currentTimeMillis().toString()
+
+        val endpoints = listOf(
+            "$API_URL/token.get?app_id=$APP_ID_IOS&format=json&t=$t",
+            "$API_URL_DESKTOP/token.get?app_id=$APP_ID_DESKTOP&format=json&t=$t"
+        )
+
+        for (url in endpoints) {
+            try {
+                val request = Request.Builder()
+                    .addHeader(
+                        "User-Agent",
+                        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+                    )
+                    .addHeader("Cookie", "AWSELBCORS=0; AWSELB=0; x-mxm-token-guid=$guid")
+                    .url(url)
+                    .build()
+
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) return@use
+                    val bodyString = response.body.string()
+                    val msg = json.decodeFromString<Token>(bodyString)
+                    val userToken = msg.message?.body?.userToken?.trim()
+                    if (isValidTokenString(userToken)) {
+                        return userToken!!
+                    }
+                }
+            } catch (_: Exception) {
+                // Try next endpoint
+            }
+        }
+
+        throw RuntimeException("Failed to obtain a valid Musixmatch token")
     }
 
     companion object {
-        const val API_URL = "https://apic-desktop.musixmatch.com/ws/1.1"
-        const val APP_ID = "web-desktop-app-v1.0"
+        const val KEY_USER_TOKEN = "user_token"
+        private const val KEY_CACHED_TOKEN = "cached_user_token"
+        private const val KEY_CACHED_EXPIRES_AT = "cached_user_token_expires_at"
+
+        const val API_URL = "https://apic.musixmatch.com/ws/1.1"
+        const val API_URL_DESKTOP = "https://apic-desktop.musixmatch.com/ws/1.1"
+        const val APP_ID_IOS = "mac-ios-v2.0"
+        const val APP_ID_DESKTOP = "web-desktop-app-v1.0"
+
+        val FALLBACK_TOKENS = listOf(
+            "261010c08a8e0025eb382466efefd0831581d43d120c3995302c2d",
+            "240502a5a589e600570b5514f7b607612f00eb34bf774d6c7028f0"
+        )
     }
 }
